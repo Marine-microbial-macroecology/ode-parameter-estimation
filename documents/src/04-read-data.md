@@ -81,5 +81,12 @@ Gadfly.plot(liefer,
 ```
 
 Create subsets of the data, one for each species, and just the variables t, R, Q, X to be used in the 
-model in the next section.
+model in the next section. Drop missing data.
 
+
+```@example Ex1
+Tp = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
+Tw = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira weissflogii" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
+Ot = filter([:Species, :cell_density ] => (x,y) -> x == "Ostreococcus tauri" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
+Ms = filter([:Species, :cell_density ] => (x,y) -> x == "Micromonas sp." && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
+```
