@@ -17,6 +17,19 @@ replace!(liefer.dilution_factor, missing => 1.0)
 nothing # hide
 ```
 
+Units for these data are 
+
+* t. days: d
+* R. DIN: µmol / L
+* Q. N: pg / cell
+* X. cell_density: cells / mL
+
+Make R into pg/mL using the conversion: µmol/L * (1 L / 1000 mL) * (14 g / mol) * (mol/10^6 µmol) * (10^12 pg / g) = 10^12 * 10^(-6) * 10^(-3) * 14 pg/mL.
+
+```@example Ex1
+transform!(liefer, :DIN => (x -> x .* (10^3 * 14)) => :DIN_pgml)
+```
+
 Make a grouped data view of the dataframe and work on that to manipulate one species and replicate at a time. Cultures were diluted after time 0 according to the data in "dilution". Use this factor to scale the cell density and DIN to simulate the values at time 0, just after dilution.
 
 ```@example Ex1
@@ -27,8 +40,8 @@ Make a grouped data view of the dataframe and work on that to manipulate one spe
 #rename!(liefer, Dict(:cell_density_dilution_factor_cumprod => "cells"))
 # liefer.cells
 # liefer = @pipe groupby(liefer, [:Species, :Replicate]) |> 
-#                transform(_, [:DIN, :dilution_factor_cumprod ] => ./ , renamecols = false)
-# rename!(liefer, Dict(:DIN_dilution_factor_cumprod => "DIN_scaled"))
+#                transform(_, [:DIN_pgml, :dilution_factor_cumprod ] => ./ , renamecols = false)
+# rename!(liefer, Dict(:DIN_pgml_dilution_factor_cumprod => "DIN_pgml_scaled"))
 gdf = groupby(liefer, [:Species, :Replicate])
 transform!(gdf, :dilution_factor => cumprod)
 transform!(gdf, :dilution_factor_cumprod => ( (x) -> x ./ minimum(x)) => :dilution_factor_min)
@@ -38,9 +51,9 @@ transform!(gdf, [:cell_density, :dilution_factor_min] => ( ./ ) => :cells)
 At time 0, the cultures were washed to remove most of the nutrients, so we don't have a good estimate of DIN at time 0. We can approximate it by computing total mass at the second sample point, or just convert them to missing values.
 
 ```@example Ex1
-# transform!(gdf, [:DIN, :dilution_factor_cumprod] => ( .* ) => :DIN_scaled)
-transform!(liefer, [:days, :DIN] => ByRow((x,y) -> x === 0 ? missing : y) => :DIN_corr)
-transform!(liefer, [:DIN_corr, :N, :cells] => ( (R,Q,X) -> R .+ Q .* X ) => :mass)
+# transform!(gdf, [:DIN_pgml, :dilution_factor_cumprod] => ( .* ) => :DIN_pgml_scaled)
+transform!(liefer, [:days, :DIN_pgml] => ByRow((x,y) -> x === 0 ? missing : y) => :DIN_pgml_corr)
+transform!(liefer, [:DIN_pgml_corr, :N, :cells] => ( (R,Q,X) -> R .+ Q .* X ) => :mass)
 ```
 
 We will use the following columns
@@ -49,7 +62,7 @@ We will use the following columns
 * Replicate
 * days (time since start of each experiment, in days; sometimes missing)
 * cell_density (cell L-1)
-* DIN (µmol L-1)
+* DIN_pgml (pg mL-1)
 * N (pg cell-1)
 
 Make some plots to show the data.
@@ -57,7 +70,7 @@ Make some plots to show the data.
 ```@example Ex1
 @df liefer scatter(:days, :N, group = :Species)
 liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :N, group = :Replicate)
-liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :DIN_corr, group = :Replicate)
+liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :DIN_pgml_corr, group = :Replicate)
 liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :mass, group = :Replicate)
 @df liefer scatter(:days, log.(:cells), group = :Species)
 ```
@@ -69,7 +82,7 @@ Gadfly.plot(liefer,
     ygroup = "Species", x = "days", y = "N", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis = true))
 Gadfly.plot(liefer, 
-    ygroup = "Species", x = "days", y = "DIN_corr", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
+    ygroup = "Species", x = "days", y = "DIN_pgml_corr", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis = true))
 Gadfly.plot(liefer, 
     ygroup = "Species", x = "days", y = "cells", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
@@ -85,8 +98,8 @@ model in the next section. Drop missing data.
 
 
 ```@example Ex1
-Tp = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
-Tw = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira weissflogii" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
-Ot = filter([:Species, :cell_density ] => (x,y) -> x == "Ostreococcus tauri" && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
-Ms = filter([:Species, :cell_density ] => (x,y) -> x == "Micromonas sp." && !ismissing(y), liefer)[:, [:days, :DIN, :N, :cell_density, :mass]]
+Tp = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
+Tw = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira weissflogii" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
+Ot = filter([:Species, :cell_density ] => (x,y) -> x == "Ostreococcus tauri" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
+Ms = filter([:Species, :cell_density ] => (x,y) -> x == "Micromonas sp." && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
 ```

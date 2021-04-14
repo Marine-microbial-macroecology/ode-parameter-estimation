@@ -6,10 +6,10 @@ Julia packages used:
 
 ```@example Ex1
 using DifferentialEquations, Plots
-using DifferentialEquations, Flux, DiffEqFlux, Optim, DiffEqSensitivity
+using Flux, DiffEqFlux, Optim, DiffEqSensitivity
 import Statistics
 using Turing, Distributions, DifferentialEquations 
-using MCMCChains, Plots, StatsPlots
+using MCMCChains, StatsPlots
 using Random
 using Logging
 ```
