@@ -2,16 +2,18 @@
 
 Of parameters an initial conditions for the Droop-Grover system using data from Liefer et al (2019).
 
-```@setup Ex1   # hide
+```@example Ex1
 # packages
 using DataFrames, CSV, StatsPlots, Query
 using DifferentialEquations, Plots
 using Flux, DiffEqFlux, Optim, DiffEqSensitivity
 import Statistics
 using LinearAlgebra
+using PrettyTables  # add PrettyTables@0.12.0 # not 0.11 # downgrades other packages... incompatible
 
 # read data
-liefer = CSV.File("liefer-growth-data.csv") |> DataFrame ; 
+cd("/Users/airwin/Desktop/ode-parameter-estimation/documents/src/")
+liefer = CSV.File("liefer-growth-data.csv") |> DataFrame ;
 rename!(liefer, [2 => :days, 5 => :cell_density, 7 => :dilution_factor])
 replace!(liefer.dilution_factor, missing => 1.0)
 replace!(liefer.DIN, missing => 0.0)
@@ -23,10 +25,10 @@ transform!(gdf, [:cell_density, :dilution_factor_min] => ( ./ ) => :cells)
 transform!(liefer, [:days, :DIN_pgml] => ByRow((x,y) -> x === 0 ? missing : y) => :DIN_pgml_corr)
 transform!(liefer, [:DIN_pgml_corr, :N, :cells] => ( (R,Q,X) -> R .+ Q .* X ) => :mass)
 
-Tp = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
-Tw = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira weissflogii" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
-Ot = filter([:Species, :cell_density ] => (x,y) -> x == "Ostreococcus tauri" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
-Ms = filter([:Species, :cell_density ] => (x,y) -> x == "Micromonas sp." && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]
+Tp = filter([:Species, :cells ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cells, :mass]]
+Tw = filter([:Species, :cells ] => (x,y) -> x == "Thalassiosira weissflogii" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cells, :mass]]
+Ot = filter([:Species, :cells ] => (x,y) -> x == "Ostreococcus tauri" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cells, :mass]]
+Ms = filter([:Species, :cells ] => (x,y) -> x == "Micromonas sp." && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cells, :mass]]
 
 # define ODE
 function droop!(du, u, p, t)
@@ -48,7 +50,7 @@ Define a loss function that uses all three replicates from a single species, all
 # DF = Ms # data for this calculation
 # my_error(dataM, solutionM) -> sum((dataM .- solutionM) .^ 2) # simple version; does not work well.
 function my_error(dataM, solutionM)
-   # Define distance between data and solution at same time points. 
+   # Define distance between data and solution at same time points.
    # Input is matrix with 3 rows (R, Q, X) and an arbitrary number of columns (time points)
    # Transform X to a log scale
    # down-weight / ignore R when very close to 0 (small nutrients not well measured)
@@ -100,7 +102,7 @@ function loss(p)
     else
       loss = my_error(data1a, data2a)
     end
-      
+
   return loss, sol2a # , sol2b, sol2c
 end
 ```
@@ -111,12 +113,12 @@ Test the loss function.
 DF = Ms
 my_scale = Diagonal([1.0, 1/100000.0,  100.0,  1/1000000.0])
 # the following can't be defined in loss() or causes error in sciml_train function call
-data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cell_density]])') 
-data0b = my_scale * identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cell_density]])')
-data0c = my_scale * identity.(Array(filter(:Replicate => x -> x == "C", DF)[:, [:days, :DIN_pgml, :N, :cell_density]])')
+data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0b = my_scale * identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0c = my_scale * identity.(Array(filter(:Replicate => x -> x == "C", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
 
 # p = [1.0, 1.0, 1.0,  1.0, 1.0, 1.0,  1.0, 1.0, 1.0,  100000.0, 200.0, 0.5, 1.0]  # 3 sets of 3 initial conditions, 4 parameters (Km, Vmax, Qmin, µmax)
-# p = [ vec(Array(DF[1:3, 3:5])') ; 100000.0 ; 0.1; 0.5; 1.0] 
+# p = [ vec(Array(DF[1:3, 3:5])') ; 100000.0 ; 0.1; 0.5; 1.0]
 p = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
 p = identity.(p) # get rid of missing value types; causes problems with ODE solver and sciml_train
 loss(p)
@@ -139,22 +141,27 @@ result_Ms2 = DiffEqFlux.sciml_train(loss, p3,
                                     ADAM(0.01),  # this argument needs to be small or instability
                                     # cb = callback,
                                     maxiters = 200)
+nothing # hide
 ```
+
+## Results for Micromonas sp.
 
 Show parameters.
 
 ```@example Ex1
-
+dt = result_Ms2.u[10:13]
+pretty_table(dt', ["Km", "Vmax", "Qmin", "µmax"])
 ```
 
 
 Show initial conditions and estimated initial conditions (scaled).
 
 ```@example Ex1
-using PrettyTables
 dt = [data0a[2:end,1] result_Ms2.u[1:3] data0b[2:end,1] result_Ms2.u[(1:3) .+ 3] data0c[2:end,1] result_Ms2.u[(1:3) .+ 6]]
-header = (["R", "", "Q", "", "X", ""], ["Data", "Model", "Data", "Model", "Data", "Model"])
-pretty_table(dt, row_names = ["Rep 1", "Rep 2" ,"Rep 3"]; header = header)
+# header = (["R", "", "Q", "", "X", ""], ["Data", "Model", "Data", "Model", "Data", "Model"])
+# pretty_table(dt, row_names = ["Rep 1", "Rep 2" ,"Rep 3"]; header = header)
+header = ["Rep1 data", "Rep1 model", "Rep2 data", "Rep2 model", "Rep3 data", "Rep3 model"]
+pretty_table(dt, header, row_names = ["R", "Q" ,"ln X"])
 ```
 
 
@@ -167,3 +174,122 @@ Plots.scatter!(data0b[1,:], data0b[2:end,:]')
 Plots.scatter!(data0c[1,:], data0c[2:end,:]')
 Plots.plot!(soln, legend=false)
 ```
+
+## T weisflogii
+
+
+```@example Ex1
+DF = Tw
+my_scale = Diagonal([1.0, 1/100000.0,  0.1,  1/10000.0])
+data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0b = my_scale * identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0c = my_scale * identity.(Array(filter(:Replicate => x -> x == "C", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+
+p = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p = identity.(p) # get rid of missing value types; causes problems with ODE solver and sciml_train
+
+p1 = identity.([ data0a[2:end, 1]; 10.0 ; 0.1; 0.5; 1.0] )
+result_Tw = DiffEqFlux.sciml_train(loss, p1,
+                                    ADAM(0.1),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 200)
+p3 = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p3[1:3] = result_Tw.u[1:3]
+p3[10:end] = result_Tw.u[4:end]
+result_Tw2 = DiffEqFlux.sciml_train(loss, p3,
+                                    ADAM(0.01),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 500)
+
+dt = result_Tw2.u[10:13]
+pretty_table(dt', ["Km", "Vmax", "Qmin", "µmax"])
+dt = [data0a[2:end,1] result_Tw2.u[1:3] data0b[2:end,1] result_Tw2.u[(1:3) .+ 3] data0c[2:end,1] result_Tw2.u[(1:3) .+ 6]]
+header = ["Rep1 data", "Rep1 model", "Rep2 data", "Rep2 model", "Rep3 data", "Rep3 model"]
+pretty_table(dt, header, row_names = ["R", "Q" ,"ln X"])
+soln = solve(ODEProblem(droop!, result_Tw2.u[1:3], (0.0, 20.0), [result_Tw2.u[10:13]; 0.0; 0.0]), Rosenbrock23())
+Plots.scatter(data0a[1,:], data0a[2:end,:]', layout = (3,1), ylabel = ["R" "Q" "X"])
+Plots.scatter!(data0b[1,:], data0b[2:end,:]')
+Plots.scatter!(data0c[1,:], data0c[2:end,:]')
+Plots.plot!(soln, legend=false)
+```
+
+
+## T pseudonana
+
+
+```@example Ex1
+DF = Tp
+my_scale = Diagonal([1.0, 1/100000.0,  1.0,  1/100000.0])
+data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0b = my_scale * identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0c = my_scale * identity.(Array(filter(:Replicate => x -> x == "C", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+
+p = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p = identity.(p) # get rid of missing value types; causes problems with ODE solver and sciml_train
+
+p1 = identity.([ data0a[2:end, 1]; 10.0 ; 0.1; 0.5; 1.0] )
+result_Tp = DiffEqFlux.sciml_train(loss, p1,
+                                    ADAM(0.1),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 200)
+p3 = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p3[1:3] = result_Tp.u[1:3]
+p3[10:end] = result_Tp.u[4:end]
+result_Tp2 = DiffEqFlux.sciml_train(loss, p3,
+                                    ADAM(0.01),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 500)
+
+dt = result_Tp2.u[10:13]
+pretty_table(dt', ["Km", "Vmax", "Qmin", "µmax"])
+dt = [data0a[2:end,1] result_Tp2.u[1:3] data0b[2:end,1] result_Tp2.u[(1:3) .+ 3] data0c[2:end,1] result_Tp2.u[(1:3) .+ 6]]
+header = ["Rep1 data", "Rep1 model", "Rep2 data", "Rep2 model", "Rep3 data", "Rep3 model"]
+pretty_table(dt, header, row_names = ["R", "Q" ,"ln X"])
+soln = solve(ODEProblem(droop!, result_Tp2.u[1:3], (0.0, 20.0), [result_Tp2.u[10:13]; 0.0; 0.0]), Rosenbrock23())
+Plots.scatter(data0a[1,:], data0a[2:end,:]', layout = (3,1), ylabel = ["R" "Q" "X"])
+Plots.scatter!(data0b[1,:], data0b[2:end,:]')
+Plots.scatter!(data0c[1,:], data0c[2:end,:]')
+Plots.plot!(soln, legend=false)
+```
+
+
+
+## O tauri
+
+
+```@example Ex1
+DF = Ot
+my_scale = Diagonal([1.0, 1/1000000.0,  100.0,  1/1000000.0])
+data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0b = my_scale * identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+data0c = my_scale * identity.(Array(filter(:Replicate => x -> x == "C", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
+
+p = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p = identity.(p) # get rid of missing value types; causes problems with ODE solver and sciml_train
+
+p1 = identity.([ data0a[2:end, 1]; 10.0 ; 0.1; 0.5; 1.0] )
+result_Ot = DiffEqFlux.sciml_train(loss, p1,
+                                    ADAM(0.1),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 200)
+p3 = [ data0a[2:end, 1]; data0b[2:end, 1]; data0c[2:end, 1]; 10.0; 0.1; 0.5; 1.0]
+p3[1:3] = result_Ot.u[1:3]
+p3[10:end] = result_Ot.u[4:end]
+result_Ot2 = DiffEqFlux.sciml_train(loss, p3,
+                                    ADAM(0.01),  # this argument needs to be small or instability
+                                    # cb = callback,
+                                    maxiters = 500)
+
+dt = result_Ot2.u[10:13]
+pretty_table(dt', ["Km", "Vmax", "Qmin", "µmax"])
+dt = [data0a[2:end,1] result_Ot2.u[1:3] data0b[2:end,1] result_Ot2.u[(1:3) .+ 3] data0c[2:end,1] result_Ot2.u[(1:3) .+ 6]]
+header = ["Rep1 data", "Rep1 model", "Rep2 data", "Rep2 model", "Rep3 data", "Rep3 model"]
+pretty_table(dt, header, row_names = ["R", "Q" ,"ln X"])
+soln = solve(ODEProblem(droop!, result_Ot2.u[1:3], (0.0, 20.0), [result_Ot2.u[10:13]; 0.0; 0.0]), Rosenbrock23())
+Plots.scatter(data0a[1,:], data0a[2:end,:]', layout = (3,1), ylabel = ["R" "Q" "X"])
+Plots.scatter!(data0b[1,:], data0b[2:end,:]')
+Plots.scatter!(data0c[1,:], data0c[2:end,:]')
+Plots.plot!(soln, legend=false)
+```
+
+Are the bad fits because of poor convergence, inappropriate scaling, or some other factor?
