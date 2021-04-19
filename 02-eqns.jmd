@@ -1,0 +1,92 @@
+---
+title : ODE parameter estimation
+author : Andrew Irwin
+date: 2021-04-20
+weave_options:
+  # doctype: github  # to make md only
+  out_width: "75%"
+  dpi: 144
+  wrap: false
+---
+
+# Droop-Grover growth
+
+## Packages
+
+```julia, results = "hidden"
+using DifferentialEquations
+using Plots
+```
+
+## Model equations
+
+We have three state variables
+
+* the nutrient (e.g., nitraite) concentration $R$, ($\mu$mol L$^{-1}$, pg m$^{-3}$)
+* the amount of nutrient within a cell $Q$, (pg cell$^{-1}$, pmol cell$^{-1}$)
+* the cell number density $X$, (cells L$^{-1}$)
+
+The dynamical equations are 
+
+```math
+\begin{aligned}
+ \frac{dR}{dt} &= d(R_{in} - R) - \rho X \\
+ \frac{dQ}{dt} &= \rho  - \mu Q \\
+ \frac{dX}{dt} &= X (\mu - d)
+\end{aligned}
+```
+
+where
+
+* uptake is  $\rho(Q) = V_{max}\frac{R}{K_m+R}$
+* growth rate is ``\mu(Q) = \mu_{max}\left(1-\frac{Q_{min}}{Q}\right)`` or ``\mu(Q) = \mu_{max}\left(\frac{Q-Q_{min}}{Q_{max}-Q_{min}}\right)``
+
+and the parameters are
+
+* ``\mu_{max}`` the maximum growth rate (d$^{-1}$), achieved at either $Q= Q_{max}$ or as $Q\to\infty$
+* ``Q_{min}`` and $Q_{max}$ the minimum and maximum cell quota (pg cell$^{-1}$) the quota at which growth stops or reaches a maximum rate
+* ``K_m`` (µmol L$^{-1}$) the half-saturation constant for nutrient uptake,
+* ``V_{max}`` (µmol cell$^{-1}$ d$^{-1}$) the maximum uptake rate per cell
+* ``d`` the dilution rate of the continuous culture
+* ``R_{in}`` the nutrient concentration in the incoming media (which has no cells)
+
+
+Naturally the initial conditions must also be specified.
+
+The differential equations can be written as a function  in Julia using the DifferentialEquations package.
+
+
+```julia, results = "hidden"
+function droop!(du, u, p, t) 
+  R, Q, X = u
+  Km, Vmax, Qmin, muMax, d, R0 = p
+  rho = Vmax * R / (Km + R)
+  mu = muMax * (1 - Qmin/Q)
+  du[1] = dRdt = d*(R0 - R) - rho*X
+  du[2] = dQdt = rho - mu*Q
+  du[3] = dXdt = (mu - d)*X
+end
+```
+
+The initial conditions, parameters, and time-span for the solution must be specified. The values used here are just convenient non-dimensionalized values. They should not be compared to real data. We will have real data soon.
+
+```julia, results = "hidden"
+u0 = [1.0, 1.0, 1.0]
+p = [0.1, 2.0, 1.0, 0.8, 0.0, 0.0]
+tspan = (0.0, 10.0)
+```
+
+Now we create and solve the ODE initial value problem. We need to pick an integration method; here we use the `Tsit5` algorithm; later we will use the implict-stiff solver `Rosenbrock23`.
+
+
+```julia, results = "hidden"
+prob = ODEProblem(droop!, u0, tspan, p)
+sol = solve(prob, Tsit5())
+```
+
+The Plots package makes it easy to plot solutions to the system.
+
+```julia echo=false
+Plots.plot(sol)
+```
+
