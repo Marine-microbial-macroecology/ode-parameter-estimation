@@ -1,0 +1,134 @@
+# determining the ODE from observations
+
+See 
+https://github.com/SciML/DataDrivenDiffEq.jl
+And
+https://datadriven.sciml.ai/stable/
+
+```julia
+using DataDrivenDiffEq, ModelingToolkit, OrdinaryDiffEq
+using LinearAlgebra, Plots
+# gr()
+
+# Create a test problem
+function lorenz(u,p,t)
+    x, y, z = u
+    ẋ = 10.0*(y - x)
+    ẏ = x*(28.0-z) - y
+    ż = x*y - (8/3)*z
+    return [ẋ, ẏ, ż]
+end
+```
+
+Compute solution
+
+```julia
+u0 = [-8.0; 7.0; 27.0]
+p = [10.0; -10.0; 28.0; -1.0; -1.0; 1.0; -8/3]
+tspan = (0.0,100.0)
+dt = 0.001  # original value in example
+dt = 1.0 # works: 101 data points and 95 equations
+# dt = 2.0 # 51 data points can't eliminate a whole bunch of the equations now...
+problem = ODEProblem(lorenz,u0,tspan)
+solution = solve(problem, Tsit5(), saveat = dt, atol = 1e-7, rtol = 1e-8)
+
+X = Array(solution)
+DX = similar(X)
+for (i, xi) in enumerate(eachcol(X))
+    DX[:,i] = lorenz(xi, [], 0.0)
+end
+```
+
+Automatically disover the equations that generated the data. (Using one hundred thousand observations!)
+
+Use a basis of polynomials of 0 to 4th power of each observed variable.
+This is a 95 dimensional basis.
+
+SINDy is the optimization routine (Sparse Identification of Nonlinear Dyanamics).
+ Takes 2 minutes.
+
+```julia
+@variables x y z
+u = [x; y; z]
+polys = Any[]
+for i ∈ 0:4
+    for j ∈ 0:i
+        for k ∈ 0:j
+            push!(polys, u[1]^i*u[2]^j*u[3]^k)
+            push!(polys, u[2]^i*u[3]^j*u[1]^k)
+            push!(polys, u[3]^i*u[1]^j*u[2]^k)
+        end
+    end
+end
+
+basis = Basis(polys, u)
+
+opt = STRRidge(0.1)
+Ψ = SINDy(X, DX, basis, opt, maxiter = 100, normalize = true)
+print_equations(Ψ)
+print_equations(Ψ; show_parameter = true)
+get_error(Ψ)
+get_aicc(Ψ)
+get_coefficients(Ψ)  
+```
+
+Show the coefficients that are bigger in magnitude than 0.01
+
+```julia
+c = get_coefficients(Ψ)
+cz = map(x -> (abs(x) < 0.01 ? 0.0 : x), c)
+filter(x -> abs(x) > 0.05, c)
+p # compare with true answer.  Doesn't quite get it....
+```
+
+Generate the ODE system using these learned parameters. Works with 100 samples, not 50.
+
+
+```julia
+ps = parameters(Ψ)
+sys = ODESystem(Ψ)
+dudt = ODEFunction(sys)
+
+prob = ODEProblem(dudt, u0, tspan, ps)
+sol = solve(prob, Tsit5(), saveat = solution.t, atol = 1e-7, rtol = 1e-8)
+plot(sol)
+```
+
+
+Try a less difficult basis. Just up to cubes.
+
+
+```julia
+dt = 2.0 # 51 data points can't eliminate a whole bunch of the equations now...
+problem = ODEProblem(lorenz,u0,tspan)
+solution = solve(problem, Tsit5(), saveat = dt, atol = 1e-7, rtol = 1e-8)
+
+X = Array(solution)
+DX = similar(X)
+for (i, xi) in enumerate(eachcol(X))
+    DX[:,i] = lorenz(xi, [], 0.0)
+end
+
+@variables x y z
+u = [x; y; z]
+polys = Any[]
+for i ∈ 0:3
+    for j ∈ 0:i
+        for k ∈ 0:j
+            push!(polys, u[1]^i*u[2]^j*u[3]^k)
+            push!(polys, u[2]^i*u[3]^j*u[1]^k)
+            push!(polys, u[3]^i*u[1]^j*u[2]^k)
+        end
+    end
+end
+
+basis = Basis(polys, u)
+
+opt = STRRidge(0.1)
+Ψ = SINDy(X, DX, basis, opt, maxiter = 100, normalize = true)
+print_equations(Ψ)
+print_equations(Ψ; show_parameter = true)
+get_error(Ψ)
+get_aicc(Ψ)
+get_coefficients(Ψ)  
+```
