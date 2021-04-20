@@ -1,0 +1,301 @@
+---
+title: "Which ratios determine growth rate?"
+author: "Andrew Irwin"
+date: "2021-04-19"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Growth rate estimated by regression
+
+Use glmnet to get sparse regression to test which macromolecules (ratios, products) best predict growth rate.
+
+```{r echo=FALSE, message=FALSE}
+library(tidyverse)
+library(janitor)
+library(patchwork)
+library(glmnet)
+library(kableExtra)
+```
+
+Read data
+
+```{r message=FALSE}
+# liefer <- read_csv("liefer-growth-data.csv") %>% clean_names()
+liefer <- read_csv("liefer-estimated-derivatives.csv") %>% clean_names()
+liefer <- liefer %>% group_by(species, replicate) %>%
+  replace_na(list(dilution_factor = 1 )) %>%
+  mutate(dilution = cumprod(dilution_factor),
+         cells = cell_density/dilution)
+```
+
+Plot, with a focus on growth rate and quota, macromolecules.
+
+The traditional model for growth rate, at least at equilibrium, is
+
+$$\mu - \mu_{max}\left(1 - \frac{Q_{min}}{Q}\right)$$
+where Q is the cell content (quota) of a limiting resource. In these experiments that is nitrogen.
+
+So the first plot shows growth rate as a function of 1/N (nitrogen per cell). The RNA/protein ratio is thought to be important too, so I'm showing that as well.
+
+```{r}
+liefer %>% ggplot(aes(x = 1/n,
+                      y = derivative, # growth_rate,
+                      color = replicate)) +
+  facet_wrap( ~ species, scale="free") +
+  geom_point() 
+liefer %>% ggplot(aes(x = rna/protein,
+                      y = derivative, # growth_rate,
+                      color = replicate)) +
+  facet_wrap( ~ species, scale="free") +
+  geom_point() 
+```
+
+## Sample calculation
+
+Use glmnet to fit a model. Prepare the response and design matrix. Just do one replicate for now. 
+
+```{r}
+s1 <- liefer %>% filter(!is.na(cells), !is.na(rna), replicate == "B", 
+                        species == "Thalassiosira pseudonana")
+X <- s1[, c("c", "n", "p", "rna", "protein", "chl_a", "total_pigments")] %>% as.matrix()
+X <- s1 %>% ungroup() %>% select(c, n, p, rna, protein, dna, chl_a, total_pigments) %>%
+  mutate(log_n_c = log(n/c),
+         log_n_p = log(n/p),
+         log_n_rna = log(n/rna),
+         log_n_protein = log(n/protein),
+         log_n_dna = log(n/dna),
+         log_n_chl_a = log(n/chl_a),
+         log_rna_pro = log(rna/protein),
+         log_rna_dna = log(rna/dna),
+         log_chla_dna = log(chl_a/dna)) %>% as.matrix()
+m1 <- glmnet(X, 
+             s1 %>% pull(derivative), # pull(growth_rate),
+             family = "gaussian",
+             alpha = 1 # lasso
+             )
+plot(m1)
+coef(m1, s = 0.01)
+pr1 <- predict(m1, newx = X,
+        s = c(0.01, 0.1)) %>% as_tibble()
+names(pr1) <- c("alpha0.01", "alpha0.1")
+bind_cols(s1, pr1) %>% ggplot(aes(x = derivative)) +  # growth_rate)) + 
+  # geom_point(aes(y = alpha0.1), color = "blue") +
+  geom_point(aes(y = alpha0.01)) +
+  geom_abline(aes(intercept = 0, slope = 1))
+```
+
+# Calculation for 3 replicates, one species at a time
+
+Add a constant for replicates B and C but use same coefficients for all replicates.
+
+```{r}
+glmF <- function(spp = "Thalassiosira pseudonana") {
+  s1 <- liefer %>% filter(!is.na(cells), !is.na(rna),  
+                        species == spp)
+  # X <- s1[, c("n", "p", "rna", "protein")] %>% as.matrix()
+  X <- s1 %>% ungroup() %>%
+    mutate(# RepA = 0 + (replicate == "A"),
+         RepB = 0 + (replicate == "B"),
+         RepC = 0 + (replicate == "C")) %>%
+    select(RepB, RepC, c, n, p, rna, protein, dna, chl_a, total_pigments) %>%  
+    mutate(  log_n_c = log(n/c),
+         log_n_p = log(n/p),
+         log_n_rna = log(n/rna),
+         log_n_protein = log(n/protein),
+         log_n_dna = log(n/dna),
+         log_n_chl_a = log(n/chl_a),
+         log_rna_pro = log(rna/protein),
+         log_rna_dna = log(rna/dna),
+         log_chla_dna = log(chl_a/dna)) %>%
+    # select(-c, -n, -p, -rna, -protein, -dna, -chl_a, -total_pigments) %>%
+    as.matrix()       
+  m1 <- glmnet(X, 
+            s1 %>% pull(derivative), #  pull(growth_rate),
+             family = "gaussian",
+             alpha = 1 # lasso
+             )
+  # plot(m1)
+  pr1 <- predict(m1, newx = X,
+        s = c(0.01, 0.001)) %>% as_tibble()
+  names(pr1) <- c("alpha0.01", "alpha0.001")
+  bind_cols(s1, pr1) %>% mutate(spp = spp) %>% ggplot(aes(x = derivative)) + # growth_rate)) + 
+    geom_point(aes(y = alpha0.001), color = "blue") +
+    # geom_point(aes(y = alpha0.01)) +
+    geom_abline(aes(intercept = 0, slope = 1)) +
+    labs(x = "Observed (estimated) growth rate",
+         y = "Predicted growth rate",
+         title = spp) -> p1
+  list(plot = p1, coef = coef(m1, s = 0.001))
+}
+
+```
+
+## Predicted vs observed
+
+This looks like a pretty good match up between predicted and observed growth rate.
+
+```{r}
+m1 <- glmF()
+m2 <- glmF("Thalassiosira weissflogii")
+m3 <- glmF("Ostreococcus tauri")
+m4 <- glmF("Micromonas sp.")
+(m1$plot + m2$plot) / (m3$plot + m4$plot)
+```
+
+## Coefficients
+
+
+```{r}
+t1 <- cbind(m1$coef, m2$coef, m3$coef, m4$coef) 
+colnames(t1) = c("T. pseudonana", "T. weissflogii", "O. tauri", "Micromonas sp.")
+t1a <- t1 %>% as.matrix() 
+t1a[t1a == 0] <- NA
+opts <- options(knitr.kable.NA = "")
+t1a %>% knitr::kable(digits = 3) %>% kable_styling(full_width = FALSE, bootstrap_options = "striped")
+```
+
+
+# Re-do without "quotas"
+
+The most important variables seem to be the amounts per cell (N, chl, DNA, etc). Leave those out and repeat the calculations. Also omit C/N and N/P as these are somewhat redundant with macromolecular ratios and we're more interested in those.
+
+```{r}
+glmF <- function(spp = "Thalassiosira pseudonana") {
+  s1 <- liefer %>% filter(!is.na(cells), !is.na(rna),  
+                        species == spp)
+  # X <- s1[, c("n", "p", "rna", "protein")] %>% as.matrix()
+  X <- s1 %>% ungroup() %>%
+    mutate(# RepA = 0 + (replicate == "A"),
+         RepB = 0 + (replicate == "B"),
+         RepC = 0 + (replicate == "C")) %>%
+    select(RepB, RepC, c, n, p, rna, protein, dna, chl_a, total_pigments) %>%  
+    mutate( #  log_n_c = log(n/c),
+         # log_n_p = log(n/p),
+         log_n_rna = log(n/rna),
+         log_n_protein = log(n/protein),
+         log_n_dna = log(n/dna),
+         log_n_chl_a = log(n/chl_a),
+         log_rna_pro = log(rna/protein),
+         log_rna_dna = log(rna/dna),
+         log_chla_dna = log(chl_a/dna)) %>%
+    select(-c, -n, -p, -rna, -protein, -dna, -chl_a, -total_pigments) %>%
+    as.matrix()       
+  m1 <- glmnet(X, 
+            s1 %>% pull(derivative), #  pull(growth_rate),
+             family = "gaussian",
+             alpha = 1 # lasso
+             )
+  # plot(m1)
+  pr1 <- predict(m1, newx = X,
+        s = c(0.01, 0.001)) %>% as_tibble()
+  names(pr1) <- c("alpha0.01", "alpha0.001")
+  bind_cols(s1, pr1) %>% mutate(spp = spp) %>% ggplot(aes(x = derivative)) + # growth_rate)) + 
+    geom_point(aes(y = alpha0.001), color = "blue") +
+    # geom_point(aes(y = alpha0.01)) +
+    geom_abline(aes(intercept = 0, slope = 1)) +
+    labs(x = "Observed (estimated) growth rate",
+         y = "Predicted growth rate",
+         title = spp) -> p1
+  list(plot = p1, coef = coef(m1, s = 0.001))
+}
+
+```
+
+
+## Predicted vs observed
+
+```{r}
+m1 <- glmF()
+m2 <- glmF("Thalassiosira weissflogii")
+m3 <- glmF("Ostreococcus tauri")
+m4 <- glmF("Micromonas sp.")
+(m1$plot + m2$plot) / (m3$plot + m4$plot)
+```
+
+## Coefficients
+
+```{r}
+t1 <- cbind(m1$coef, m2$coef, m3$coef, m4$coef) 
+colnames(t1) = c("T. pseudonana", "T. weissflogii", "O. tauri", "Micromonas sp.")
+t1a <- t1 %>% as.matrix() 
+t1a[t1a == 0] <- NA
+opts <- options(knitr.kable.NA = "")
+t1a %>% knitr::kable(digits = 3) %>% kable_styling(full_width = FALSE, bootstrap_options = "striped")
+```
+
+# Better choices
+
+Drop all elemental ratios. Just macromolecules.
+
+Use cv.glmnet to select lambda.
+
+
+```{r}
+glmF <- function(spp = "Thalassiosira pseudonana") {
+  s1 <- liefer %>% filter(!is.na(cells), !is.na(rna),  
+                        species == spp)
+  # X <- s1[, c("n", "p", "rna", "protein")] %>% as.matrix()
+  X <- s1 %>% ungroup() %>%
+    mutate(# RepA = 0 + (replicate == "A"),
+         RepB = 0 + (replicate == "B"),
+         RepC = 0 + (replicate == "C")) %>%
+    select(RepB, RepC, rna, protein, dna, chl_a, total_pigments) %>%  
+    mutate( 
+         log_rna_pro = log(rna/protein),
+         log_rna_dna = log(rna/dna),
+         log_rna_chl_a = log(rna/chl_a),
+         # log_rna_pigment = log(rna/total_pigments),
+         log_protein_dna = log(protein/dna),
+         log_protein_chla = log(protein/chl_a),
+         # log_protein_pigment = log(protein/total_pigments),
+         # log_chla_pigment = log(chl_a/total_pigments),
+         log_chla_dna = log(chl_a/dna)) %>%
+    select(-rna, -protein, -dna, -chl_a, -total_pigments) %>%
+    as.matrix()       
+  m1 <- cv.glmnet(X, 
+            s1 %>% pull(derivative), #  pull(growth_rate),
+             family = "gaussian",
+             alpha = 1 # lasso
+             )
+  # plot(m1)
+  pr1 <- predict(m1, newx = X, s = "lambda.1se") %>% as_tibble()
+  names(pr1) <- c("1se")
+  bind_cols(s1, pr1) %>% mutate(spp = spp) %>% ggplot(aes(x = derivative)) + # growth_rate)) + 
+    geom_point(aes(y = `1se`), color = "blue") +
+    # geom_point(aes(y = alpha0.01)) +
+    geom_abline(aes(intercept = 0, slope = 1)) +
+    labs(x = "Observed (estimated) growth rate",
+         y = "Predicted growth rate",
+         title = spp) -> p1
+  list(plot = p1, coef = coef(m1, s = "lambda.1se"))
+}
+
+```
+
+
+## Predicted vs observed
+
+```{r}
+m1 <- glmF()
+m2 <- glmF("Thalassiosira weissflogii")
+m3 <- glmF("Ostreococcus tauri")
+m4 <- glmF("Micromonas sp.")
+(m1$plot + m2$plot) / (m3$plot + m4$plot)
+```
+
+## Coefficients
+
+```{r}
+t1 <- cbind(m1$coef, m2$coef, m3$coef, m4$coef) 
+colnames(t1) = c("T. pseudonana", "T. weissflogii", "O. tauri", "Micromonas sp.")
+t1a <- t1 %>% as.matrix() 
+t1a[t1a == 0] <- NA
+opts <- options(knitr.kable.NA = "")
+t1a %>% knitr::kable(digits = 3) %>% kable_styling(full_width = FALSE, bootstrap_options = "striped")
+```
+
+
+

@@ -21,7 +21,7 @@ import Gadfly
 Read the data from a file. Simplify some of the names. Change missing dilution factors to 1, and compute cumulative dilution factor by multiplication.
 
 ```julia, results="hidden"
-liefer = CSV.File("liefer-growth-data.csv") |> DataFrame ; 
+liefer = CSV.File("/Users/airwin/Dropbox/Julia/ode-parameter-estimation/liefer-growth-data.csv") |> DataFrame ; 
 # names(liefer)
 rename!(liefer, [2 => :days, 5 => :cell_density, 7 => :dilution_factor])
 replace!(liefer.dilution_factor, missing => 1.0)

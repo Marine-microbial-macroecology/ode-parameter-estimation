@@ -1,7 +1,7 @@
 # Asset allocation
 
 ```julia
-using Plots, Roots, 
+using Plots, Roots
 ```
 
 How should earnings be allocated over a lifetime to ensure a desired

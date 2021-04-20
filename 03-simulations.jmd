@@ -3,7 +3,7 @@ title : ODE parameter estimation
 author : Andrew Irwin
 date: 2021-04-20
 weave_options:
-  doctype: github
+  # doctype: github
   out_width: "75%"
   dpi: 144
   wrap: false
@@ -25,7 +25,7 @@ using Logging
 
 ## Simulating data
 
-We use the same equations as before. This time we specify some times to sample the solution to obtain data to use in parameter estimation.
+I start with the Droop model. 
 
 
 ```julia, results = "hidden"
@@ -41,6 +41,7 @@ end
 ```
 
 The initial conditions, parameters, and time-span for the solution must be specified.
+This time we specify some times to sample the solution to obtain data to use in parameter estimation.
 
 ```julia, results = "hidden"
 u0 = [1.0, 1.0, 1.0]
@@ -60,7 +61,7 @@ sol1 = solve(prob, Tsit5())
 sol2 = solve(prob, Rosenbrock23(), saveat = tsteps)
 ```
 
-We will plot the solution and the discrete samples.
+This plot shows the solution and the discrete samples.
 
 
 ```julia, echo=false
@@ -68,7 +69,7 @@ Plots.plot(sol1)
 Plots.scatter!(sol2)
 ```
 
-We can convert the solution to a matrix and add some noise to the output.
+We can convert the solution to a matrix and add some noise to the output. These data will be used to define the objective function in the optimization.
 
 ```julia
 data1 = Array(sol2) 
@@ -80,10 +81,11 @@ Plots.scatter!(sol2.t, data1', label = ['R' 'Q' 'X'])
 
 ## Optimization to find parameters
 
-First we write a function to describe the difference between a trial solution and the
+Now write a function to describe the difference between a trial solution and the
 data points.  For the optimizer we use next, this should be a function of just the 
 parameters to be adjusted.
-Here my loss function is the difference between solution and data, scaled by standard deviation of each variable in data, squared and summed.
+Here my loss function is the sum of squared difference between solution and data. I experimented with scaling by standard deviation 
+of each variable in data, but ran into trouble with R which is usually 0.
 
 ```julia, results = "hidden"
 function loss(p)
@@ -105,6 +107,7 @@ this resulted in a worse solution, because R was so close to 0 and has a standar
 attempt, also commented out, did led to instabilities.)
 
 The optimizer allows us to provide a callback function to show the loss score, or make a plot, at each iteration.  Here's an example callback function.
+The callback has access to all the return values of the loss function.
 
 ```julia, results = "hidden"
 callback = function (p, l, pred)
@@ -117,13 +120,14 @@ callback = function (p, l, pred)
 end
 ```
 
-We can test the loss function.
+Test the loss function before proceeding.
 
 ```julia
 loss([1.0; 1.0; 1.0; p])
 ```
 
-We are now ready to use the optimizer. ADAM is the gradient-search method.
+We are now ready to use the optimizer. ADAM is the gradient-search method. The optimizer is defined in DiffEqFlux (https://diffeqflux.sciml.ai/v1.34/Scimltrain/) but can use many different backends.
+The optimizer is ADAM: https://arxiv.org/abs/1412.6980
 
 
 ```julia, results = "hidden"
@@ -152,9 +156,9 @@ Plots.scatter!(sol2.t, data1', label = ["Data R" 'Q' 'X'])
 Compare parameters.
 
 ```julia, echo=false
-xaxis = ["R0" "Q0" "X0" "Km" "Vmax" "Qmin" "muMax" "d" "R0"]
-estimate = result_ode.u'
-original = [u0; p]'
+xaxis = ["R0" "Q0" "X0" "Km" "Vmax" "Qmin" "muMax" ]
+estimate = result_ode.u[1:(end-2)]'
+original = [u0; p][1:(end-2)]'
 error = (estimate .- original ) ./ original
 p1 = Plots.scatter(xaxis, estimate, legend = false, title = "Parameters")
 p1 = Plots.scatter!(xaxis, original, legend = false)
@@ -177,6 +181,7 @@ Define a model for the parameters, including priors, solution of the ODE, and co
 @model function fitDroop1(t, R, Q, X)
     σ1 ~ InverseGamma(2, 3)  # positive support; parameters α, β; mean β/(α-1), here 3
     σ2 ~ InverseGamma(2, 3) 
+    σ3 ~ InverseGamma(2, 3) 
     R0 ~ truncated(Normal(1, 1), 0, 5) # might need strictly positive values?
     Q0 ~ truncated(Normal(1, 1), 0, 5)
     X0 ~ truncated(Normal(1, 1), 0, 5)
@@ -196,6 +201,7 @@ Define a model for the parameters, including priors, solution of the ODE, and co
         Q[j] ~ Normal(predicted[j][2], σ1)
         X[j] ~ Normal(predicted[j][3], σ2)
     end
+    R[1] ~ Normal(predicted[1][1], σ3)   # Just use the first (non-zero) DIN to anchor the solution
 end
 ```
 
@@ -208,8 +214,14 @@ Q = [v[2] for v in sol2.u]
 X = [v[3] for v in sol2.u]
 
 model = fitDroop1(t, R, Q, X)
-chain2 = sample(model, NUTS(.65), MCMCThreads(), 200, 4, progress=false)  # multi-threaded
+chain2 = sample(model, NUTS(.65), MCMCThreads(), 2000, 4, progress=false)  # multi-threaded
 # chain2 = mapreduce(c -> sample(model, NUTS(.75), 200), chainscat, 1:4) # single thread
+```
+
+Show the results.
+
+```julia
+chain2
 ```
 
 Extract data so we can plot trajectories from a selection of parameter values from the posterior distribution. Parameters come out of the chains in alphabetical order, so I resequence them to be in the order: initial conditons, parameter values as used in ODE function.

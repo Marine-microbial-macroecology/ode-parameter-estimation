@@ -3,7 +3,7 @@ title : ODE parameter estimation
 author : Andrew Irwin
 date: 2021-04-20
 weave_options:
-  # doctype: github  # to make md only
+  # doctype: github  # to make md only with figures in separate directory
   out_width: "75%"
   dpi: 144
   wrap: false

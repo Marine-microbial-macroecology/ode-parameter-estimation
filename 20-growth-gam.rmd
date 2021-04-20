@@ -1,0 +1,116 @@
+## Growth rate estimated by GAM
+
+```{r}
+library(tidyverse)
+library(mgcv)
+library(gratia)
+library(janitor)
+library(patchwork)
+```
+
+Read data
+
+```{r}
+liefer <- read_csv("liefer-growth-data.csv") %>% clean_names()
+liefer <- liefer %>% group_by(species, replicate) %>%
+  replace_na(list(dilution_factor = 1 )) %>%
+  mutate(dilution = cumprod(dilution_factor),
+         cells = cell_density/dilution)
+```
+
+Plot, with a focus on cell numbers and growth rate.
+
+```{r}
+liefer %>% ggplot(aes(x = days_in_n_free_media,
+                      y = cells,
+                      color = replicate)) +
+  facet_wrap( ~ species, scale="free_y") +
+  geom_point() +
+  scale_y_log10()
+```
+
+Fit a gam for each species and replicate, heavily penalized and using REML to reduce overfitting. Compute derivative.
+
+```{r}
+fit_deriv <- function(spp = "Thalassiosira pseudonana", rep = "A") {
+  s1 <- liefer %>% filter(replicate == rep, species == spp,
+                  !is.na(days_in_n_free_media)) 
+  m1 <- s1 %>%
+    gam(log(cells) ~ s(days_in_n_free_media, k = 5), data = .,
+      method = "REML")
+  p0 <- draw(m1,residuals=TRUE)
+  p1 <- confint(m1, "s(days_in_n_free_media)", type="confidence", shift=TRUE) %>%
+    ggplot(aes(days_in_n_free_media, est)) + 
+    geom_ribbon(aes(ymin = lower, ymax = upper), fill = "#BBBBBB") +
+    geom_line() +
+    geom_point(aes(days_in_n_free_media, log(cells)), data = s1) +
+    labs(title = paste("Log cell density", spp, rep))
+  p2 <- derivatives(m1, type = "central", interval = "confidence") %>% 
+    ggplot(aes(data, derivative)) + 
+    geom_ribbon(aes(ymin = lower, ymax = upper), fill = "#BBBBBB") +
+    geom_line() +
+    geom_point(aes(days_in_n_free_media, growth_rate), data = s1) +
+    labs(title = "Growth rate")
+  # derivatives(m1, type = "central") %>% draw()
+  p1 / p2
+}
+add_deriv <- function(spp = "Thalassiosira pseudonana", repl = "A") {
+  s1 <- liefer %>% filter(replicate == repl, species == spp,
+                  !is.na(days_in_n_free_media)) 
+  m1 <- s1 %>%
+    gam(log(cells) ~ s(days_in_n_free_media, k = 5), data = .,
+      method = "REML")
+  
+  t1 <- derivatives(m1, newdata = s1, type = "central", interval = "confidence") 
+  t2 <- left_join(liefer %>% ungroup(), 
+            t1 %>% rename(days_in_n_free_media = data) %>%
+              mutate(species = spp, replicate = repl) %>%
+              select(species, replicate, days_in_n_free_media, derivative),
+            by = c("species", "days_in_n_free_media", "replicate"))
+  if ("derivative.y" %in% names(t2)) {
+    t2 <- t2 %>% mutate(derivative = case_when( is.na(derivative.x) ~ derivative.y,
+                                                TRUE ~ derivative.x)) %>%
+      select(-derivative.x, -derivative.y)
+  }
+  t2
+}
+```
+
+```{r}
+fit_deriv()
+fit_deriv(rep = "B")
+fit_deriv(rep = "C")
+fit_deriv(spp = "Thalassiosira weissflogii", rep = "A")
+fit_deriv(spp = "Thalassiosira weissflogii", rep = "B")
+fit_deriv(spp = "Thalassiosira weissflogii", rep = "C")
+fit_deriv(spp = "Ostreococcus tauri", rep = "A")
+fit_deriv(spp = "Ostreococcus tauri", rep = "B")
+fit_deriv(spp = "Ostreococcus tauri", rep = "C")
+fit_deriv(spp = "Micromonas sp.", rep = "A")
+fit_deriv(spp = "Micromonas sp.", rep = "B")
+fit_deriv(spp = "Micromonas sp.", rep = "C")
+```
+
+
+Add derivative estimates
+
+```{r}
+liefer <- add_deriv()
+liefer <- add_deriv(rep = "B")
+liefer <- add_deriv(rep = "C")
+liefer <- add_deriv(spp = "Thalassiosira weissflogii", rep = "A")
+liefer <- add_deriv(spp = "Thalassiosira weissflogii", rep = "B")
+liefer <- add_deriv(spp = "Thalassiosira weissflogii", rep = "C")
+liefer <- add_deriv(spp = "Ostreococcus tauri", rep = "A")
+liefer <- add_deriv(spp = "Ostreococcus tauri", rep = "B")
+liefer <- add_deriv(spp = "Ostreococcus tauri", rep = "C")
+liefer <- add_deriv(spp = "Micromonas sp.", rep = "A")
+liefer <- add_deriv(spp = "Micromonas sp.", rep = "B")
+liefer <- add_deriv(spp = "Micromonas sp.", rep = "C")
+```
+
+Write new growth rates to file.
+
+```{r}
+write_csv(liefer, "liefer-estimated-derivatives.csv")
+```

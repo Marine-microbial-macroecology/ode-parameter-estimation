@@ -6,11 +6,27 @@ model of phytoplankton growth on one limiting nutrient with growth rate determin
 
 Examples are broken into the following sections
 
-* The differential equations and their numerical solution
-* Parameter estimation from simulated data
-* Observational data from lab cultures
-* SciML optimization to estimate parameters and initial conditions
-* Turing-MCMCChains methods to estimate distributions of parameters and predicted trajectories
+* [Section 1](02-eqns.html): The differential equations and their numerical solution
+* [Section 2](03-simulations.html): Parameter estimation from simulated data using both "Flux" optimization and "Turing" model with MCMC
+* [Section 3](04-read-data.html): Gather some observational data from four lab cultures undergoing nitrogen starvation
+* [Section 4](05-data-point-estimate.html): SciML optimization to estimate parameters and initial conditions for these data
+* [Section 5](06-posterior-distribution.html): Turing-MCMCChains methods to estimate distributions of parameters and predicted trajectories
+
+A related effort is to discover the differential equations that drive a system by sparse regression. That is, provide many possible terms for the right hand side of $x' = f(t,x)$ and 
+use LASSO-type shrinkage to eliminate most of the terms.
+
+* [Section 2.1](07-data-drive-de.html): An example using the Droop-Grover phytoplankton growth Model
+* [Section 2.2](xxx): An example using culture data (not written yet)
+
+Here are a couple of other ideas related to growth of phytoplankton cultures.
+
+* [Section 3.1](20-growth-gam.html): Estimating growth rate in a non-steady-state culture using a model-free (GAM) approach
+* [Section 3.2](21-growth-glmnet.html): Attempt to discover the macromolecular ratios that best predict phytoplankton growth under N starvation using sparse regression (GLMnet/LASSO)
+
+Some other Julia explorations
+
+* [Section X.1](08-probabilistic-solutions.html): Explore trajectories of numerical soltutions of ODEs. (A quick example to explore more fully later.)
+
 
 
 

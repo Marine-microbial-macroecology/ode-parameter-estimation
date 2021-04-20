@@ -1,3 +1,5 @@
+# julia -t auto make.jl 
+
 using Weave
 
 cd("/Users/airwin/Dropbox/Julia/ode-parameter-estimation/")
@@ -12,6 +14,9 @@ jmd_files = [ i.match for i in z ]
 
 for f in jmd_files
     if stat(f).mtime > stat(replace("build" * f, "jmd" => "html")).mtime
-      weave(f; doctype = "md2html", out_path = "build", cache = :all)
+      print("Starting " * f * "\n")
+      weave(f; doctype = "md2html", out_path = "build", cache = :off) # cache options :all, :off, :refresh
     end
 end
+
+# I don't cache using weave since I only recompute if the jmd is newer than the html.
