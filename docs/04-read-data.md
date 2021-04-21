@@ -11,13 +11,9 @@ Here I will show culture data for N-starved cultures of phytoplankton, tracked o
 
 ```julia
 using DataFrames, CSV, StatsPlots, Query
-import Gadfly,
+using Gadfly
 using Compose, Cairo, Fontconfig
 ```
-
-<pre class="julia-error">
-ERROR: syntax: extra token &quot;Compose&quot; after end of expression
-</pre>
 
 
 
@@ -128,7 +124,7 @@ Gadfly output doesn't work with Weave.jl. Work around of writing graphic to file
 julia> p1 = Gadfly.plot(liefer, 
            ygroup = "Species", x = "days", y = "N", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
            free_y_axis = true))
-Error: UndefVarError: Gadfly not defined
+Plot(...)
 
 julia> # draw(SVG("04-gadfly-01.svg", 6inch, 4inch), p1)
        # draw(PNG("04-gadfly-01.png", 6inch, 4inch), p1)
@@ -137,7 +133,7 @@ julia> # draw(SVG("04-gadfly-01.svg", 6inch, 4inch), p1)
        p2 = Gadfly.plot(liefer, 
            ygroup = "Species", x = "days", y = "DIN_pgml_corr", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
            free_y_axis = true))
-Error: UndefVarError: Gadfly not defined
+Plot(...)
 
 julia> # draw(PNG("04-gadfly-02.png", 6inch, 4inch), p1)
        # p2 = load("04-gadfly-02.png")
@@ -146,7 +142,7 @@ julia> # draw(PNG("04-gadfly-02.png", 6inch, 4inch), p1)
            ygroup = "Species", x = "days", y = "cells", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
            free_y_axis=true), 
            Gadfly.Scale.y_log10)
-Error: UndefVarError: Gadfly not defined
+Plot(...)
 
 julia> # draw(PNG("04-gadfly-03.png", 6inch, 4inch), p1)
        # p3 = load("04-gadfly-03.png")
@@ -154,7 +150,7 @@ julia> # draw(PNG("04-gadfly-03.png", 6inch, 4inch), p1)
        p4 = Gadfly.plot(liefer, 
            ygroup = "Species", x = "days", y = "mass", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
            free_y_axis = true))
-Error: UndefVarError: Gadfly not defined
+Plot(...)
 ```
 
 
