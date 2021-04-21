@@ -2,6 +2,11 @@
 
 Probabilistic ODE solutions based on Bayesian filtering. Not really sure what this means... but it's not inference, but a different approach to quantifying numerical error.
 
+See
+
+* https://github.com/nathanaelbosch/ProbNumDiffEq.jl
+* and possibly also https://arxiv.org/abs/1810.03440
+
 ```julia, results = "hidden"
 using ProbNumDiffEq
 using DifferentialEquations, Plots

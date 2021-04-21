@@ -15,8 +15,9 @@ Examples are broken into the following sections
 A related effort is to discover the differential equations that drive a system by sparse regression. That is, provide many possible terms for the right hand side of $x' = f(t,x)$ and 
 use LASSO-type shrinkage to eliminate most of the terms.
 
-* [Section 2.1](07-data-drive-de.html): An example using the Droop-Grover phytoplankton growth Model
-* [Section 2.2](xxx): An example using culture data (not written yet)
+* [Section 2.1](07-data-drive-de.html): An example using the Lorenz equations
+* [Section 2.2](xxx): not written yet. Droop-Grover phytoplankton growth Model
+* [Section 2.3](xxx): An example using culture data (not written yet)
 
 Here are a couple of other ideas related to growth of phytoplankton cultures.
 
@@ -37,3 +38,7 @@ I have lots of Julia questions!
 * What is a good way to refer to files relative to the path of the current file or project? I've used absolute paths in these files, which seems like a terrible idea
 * What optimizer am I using with scikit_optim, ADAM ? Should I be doing something else?
 * What is a good way to cope with defining an error/RMSE function with: one variable very close to 0 for most but not all observations, one variable lognormal, and one variable normally distributed?
+
+And some other questions!
+
+* Math shows up fine in HTML, but is not formatted in md / github pages

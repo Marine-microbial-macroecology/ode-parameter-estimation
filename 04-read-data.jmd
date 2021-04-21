@@ -15,7 +15,7 @@ Here I will show culture data for N-starved cultures of phytoplankton, tracked o
 
 ```julia
 using DataFrames, CSV, StatsPlots, Query
-import Gadfly
+using Gadfly
 using Compose, Cairo, Fontconfig
 ```
 
