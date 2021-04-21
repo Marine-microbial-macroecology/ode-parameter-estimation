@@ -73,7 +73,7 @@ The initial conditions, parameters, and time-span for the solution must be speci
 ```julia, results = "hidden"
 u0 = [1.0, 1.0, 1.0]
 p = [0.1, 2.0, 1.0, 0.8, 0.0, 0.0]
-tspan = (0.0, 10.0)
+tspan = (0.0, 6.0)
 ```
 
 Now we create and solve the ODE initial value problem. We need to pick an integration method; here we use the `Tsit5` algorithm; later we will use the implict-stiff solver `Rosenbrock23`.
@@ -87,6 +87,6 @@ sol = solve(prob, Tsit5())
 The Plots package makes it easy to plot solutions to the system.
 
 ```julia echo=false
-Plots.plot(sol)
+Plots.plot(sol, labels = ["R" "Q" "X"])
 ```
 

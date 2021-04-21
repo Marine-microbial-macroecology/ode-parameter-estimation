@@ -1,6 +1,6 @@
 # Point estimates
 
-Of parameters an initial conditions for the Droop-Grover system using data from Liefer et al (2019).
+Estinate parameters and initial conditions for the Droop-Grover system using data from Liefer et al (2019) using optimization from Flux and DiffEqFlux.
 
 ```julia, results = "hidden"
 using DataFrames, CSV, StatsPlots, Query

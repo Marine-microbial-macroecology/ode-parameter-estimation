@@ -18,7 +18,7 @@ for f in jmd_files
 
     if jmd_info.mtime > html_info.mtime
       print("Starting " * f * "\n")
-      weave(f; doctype = "md2html", out_path = "docs", cache = :all) # cache options :all, :off, :refresh
+      weave(f; doctype = "md2html", out_path = "docs", cache = :refresh) # cache options :all, :off, :refresh
       weave(f; doctype = "github", out_path = "docs", cache = :all) 
     else
       print("Skipping " * f * ": last modified " * string(unix2datetime(jmd_info.mtime)) * 

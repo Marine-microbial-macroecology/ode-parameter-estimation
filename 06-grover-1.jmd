@@ -1,0 +1,199 @@
+# Turing-MCMC parameter estimation
+
+```julia
+using DataFrames
+using CSV
+using Plots
+liefer = CSV.File("/Users/airwin/Dropbox/Julia/ode-parameter-estimation/liefer-growth-data.csv") |> DataFrame ; 
+# liefer = CSV.File("liefer-growth-data.csv") |> DataFrame ; 
+ss = filter( [:"Species", :"Replicate", :"Cell Density"] => (x,y,z) -> x == "Thalassiosira pseudonana" && y == "A" && !ismissing(z), liefer)
+t = ss."Days in N-free Media"
+R = ss.DIN
+Q = ss.N
+X = ss."Cell Density"
+R = map(x -> ismissing(x) ? 0 : x, R)
+RpgmL = R .* (10^3 * 14)
+RpgmL[1] = RpgmL[2] + Q[2]*X[2] - Q[1]*X[1]
+liefer[4,:"Dilution Factor"]
+X[1] = X[1]*liefer[4,:"Dilution Factor"]
+[t R Q X] # units: d, µmol/L, pg/cell, cells/mL
+[t RpgmL Q X] # units: d, pg/mL, pg/cell, cells/mL
+```
+
+Look at the data
+
+```julia
+Plots.scatter(t, RpgmL .+ Q .* X, label = "Mass")
+Plots.scatter!(t, RpgmL, label = "DIN")
+Plots.scatter!(t, Q .* X, label = "Cell N")
+```
+
+Get the other replicates organized.
+
+```julia
+t1, RpgmL1, Q1, X1 = t, RpgmL, Q, X
+
+ss = filter( [:"Species", :"Replicate", :"Cell Density"] => (x,y,z) -> x == "Thalassiosira pseudonana" && y == "B" && !ismissing(z), liefer)
+t = ss."Days in N-free Media"
+R = ss.DIN
+Q = ss.N
+X = ss."Cell Density"
+R = map(x -> ismissing(x) ? 0 : x, R)
+RpgmL = R .* (10^3 * 14)
+liefer[4,:"Dilution Factor"]
+X[1] = X[1]*liefer[4,:"Dilution Factor"]
+p2 = Plots.scatter(t, RpgmL .+ Q .* X)
+p2 = Plots.scatter!(t, RpgmL)
+p2 = Plots.scatter!(t, Q .* X)
+RpgmL[1] = RpgmL[2] + Q[2]*X[2] - Q[1]*X[1]
+t2, RpgmL2, Q2, X2 = t, RpgmL, Q, X
+
+ss = filter( [:"Species", :"Replicate", :"Cell Density"] => (x,y,z) -> x == "Thalassiosira pseudonana" && y == "C" && !ismissing(z), liefer)
+t = ss."Days in N-free Media"
+R = ss.DIN
+Q = ss.N
+X = ss."Cell Density"
+R = map(x -> ismissing(x) ? 0 : x, R)
+RpgmL = R .* (10^3 * 14)
+liefer[4,:"Dilution Factor"]
+X[1] = X[1]*liefer[4,:"Dilution Factor"]
+p3 = Plots.scatter(t, RpgmL .+ Q .* X)
+p3 = Plots.scatter!(t, RpgmL)
+p3 = Plots.scatter!(t, Q .* X)
+RpgmL[1] = RpgmL[2] + Q[2]*X[2] - Q[1]*X[1]
+t3, RpgmL3, Q3, X3 = t, RpgmL, Q, X
+
+```
+
+Following example [tutorial](https://github.com/TuringLang/TuringTutorials/blob/master/10_diffeq.ipynb)
+and [another source](https://turing.ml/dev/tutorials/10-bayesiandiffeq/)
+
+```julia
+using Turing, Distributions, DifferentialEquations 
+
+# Import MCMCChain, Plots, and StatsPlots for visualizations and diagnostics.
+using MCMCChains, Plots, StatsPlots
+
+# Set a seed for reproducibility.
+using Random
+Random.seed!(14);
+using Logging
+Logging.disable_logging(Logging.Warn)
+```
+
+Define a model for the data
+
+```julia
+Turing.setadbackend(:forwarddiff)
+
+@model function fitDroop(t, R, Q, X, logX)
+    σ1 ~ InverseGamma(2, 3) # ~ is the tilde character
+    σ2 ~ InverseGamma(2, 3) # ~ is the tilde character
+    Km ~ truncated(Normal(100,10),0,200)
+    Vmax ~ truncated(Normal(1.2,0.5),0,3)
+    Qmin ~ truncated(Normal(1.0,0.5),0,3)
+    muMax ~ truncated(Normal(1.0,0.5),0,3)
+
+    p = [ Km, Vmax, Qmin, muMax]
+
+    # must define the problem with numeric values first, then update with distributions
+    prob1 = ODEProblem(droop!, [RpgmL1[1], Q1[1], X1[1]], (0.0, 10.0), [200.0, 1.0, 1.0, 1.0])
+    prob = remake(prob1, p=p)  # modifies the original problem
+
+    predicted = solve(prob, Rosenbrock23(), saveat=t)
+    
+    for j = 1:7
+        Q[j] ~ Normal(predicted[j][2], σ1)
+        logX[j] ~ Normal(log.(predicted[j][3]), σ2)
+    end
+end
+
+
+@model function fitDroop1(t, R, Q, X, logX)
+    σ1 ~ InverseGamma(2, 3) # ~ is the tilde character
+    # σ2 ~ InverseGamma(2, 3) 
+    R0 ~ Normal(300000, 1000)
+    Q0 ~ truncated(Normal(3, 1), 0, 10)
+    X0 ~ Normal(65000,1000)
+    Km ~ truncated(Normal(100,10),0,200)
+    Vmax ~ truncated(Normal(1.2,0.5),0,3)
+    Qmin ~ truncated(Normal(1.0,0.5),0,3)
+    muMax ~ truncated(Normal(1.0,0.5),0,3)
+
+    p = [ Km, Vmax, Qmin, muMax]
+
+    # must define the problem with numeric values first, then update with distributions
+    prob1 = ODEProblem(droop!, [RpgmL1[1], Q1[1], X1[1]], (0.0, 10.0), [200.0, 1.0, 1.0, 1.0])
+    prob = remake(prob1, u0=[R0, Q0, X0], p=p)  # modifies the original problem  # fails ****
+
+    # prob = ODEProblem(droop!, [R0, Q0, X0], (0,10), p)
+    # prob = ODEProblem(droop!, [R[1], Q[1], exp(X[1])], (0.0, 10.0), p)
+    predicted = solve(prob, Rosenbrock23(), saveat=t)
+    
+    for j = 1:7
+        Q[j] ~ Normal(predicted[j][2], σ1)
+        # logX[i] ~ Normal(predicted[i][3], σ2)
+    end
+end
+```
+
+Create the model and use MCMC to fit it.
+
+
+```julia
+model = fitDroop(t, RpgmL1, Q1, X1, log.(X1))
+chain2 = sample(model, NUTS(.65), MCMCThreads(), 100, 4, progress=false) # not enough iterations; demo only
+```
+
+Median of posterior distribution
+
+```julia
+median(chain2[:muMax]), median(chain2[:Qmin]), median(chain2[:Km]), median(chain2[:Vmax])
+```
+
+Traceplots and distributions
+
+```julia
+Plots.plot(chain2)
+```
+
+Plots of data and solutions
+
+```julia
+chain_array = Array(chain2);
+
+sol2 = solve(remake(prob, 
+        p = [median(chain2[:Km]), median(chain2[:Qmin]), median(chain2[:Vmax]), median(chain2[:muMax])]), 
+        Rosenbrock23()); 
+
+pl = Plots.scatter(t, RpgmL1);
+for k in 1:300
+    resol = solve(remake(prob,p=chain_array[rand(1:size(chain_array)[1]), 1:4]),Rosenbrock23()) 
+    # Note that due to a bug in AxisArray, the variables from the chain will be returned always in
+    # the order it is stored in the array, not by the specified order in the call - :α, :β, :γ, :δ
+    plot!(resol, vars=(0,1), alpha=0.3, color = "#BBBBBB", legend = false, ylims=(0, Inf))
+end
+plot!(sol2, vars=(0,1), alpha=1, color = "#BB0000", legend = false, ylims=(0, Inf))
+display(pl)
+
+pl = Plots.scatter(t, Q1);
+for k in 1:300
+    resol = solve(remake(prob,p=chain_array[rand(1:size(chain_array)[1]), 1:4]),Rosenbrock23()) 
+    # Note that due to a bug in AxisArray, the variables from the chain will be returned always in
+    # the order it is stored in the array, not by the specified order in the call - :α, :β, :γ, :δ
+    plot!(resol, vars=(0,2), alpha=0.31, color = "#BBBBBB", legend = false)
+end
+plot!(sol2, vars=(0,2), alpha=1, color = "#BB0000", legend = false)
+display(pl)
+
+pl = Plots.scatter(t, log.(X1));
+for k in 1:300
+    resol = solve(remake(prob,p=chain_array[rand(1:size(chain_array)[1]), 1:4]),Rosenbrock23()) 
+    # Note that due to a bug in AxisArray, the variables from the chain will be returned always in
+    # the order it is stored in the array, not by the specified order in the call - :α, :β, :γ, :δ
+    plot!(resol, vars=((t,x) -> (t, log.(x)), 0,3), alpha=0.3, color = "#BBBBBB", legend = false)
+end
+plot!(sol2, vars=((t,x) -> (t, log.(x)), 0,3), alpha=1, color = "#BB0000", legend = false)
+display(pl)
+
+```

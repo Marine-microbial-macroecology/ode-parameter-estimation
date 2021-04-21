@@ -1,6 +1,7 @@
 # Posterior distribution of parameter 
 
-Of parameters an initial conditions for the Droop-Grover system using data from Liefer et al (2019).
+Estimate parameters and initial conditions for the Droop-Grover system using data from Liefer et al (2019)
+woth Turing and MCMC to get posterior distributions on the parameters.
 
 Start by preparing the data the same way we did for the point-estimate example
 
@@ -191,7 +192,7 @@ model1 = fitDroop1(Tw)
 Fit model
 
 ```julia
-chain0 = sample(model0, NUTS(0.65), 100)  
+chain0 = sample(model0, NUTS(0.65), 10)  
 chain1 = sample(model1, NUTS(0.65), 100)  
 # chain = mapreduce(c -> sample(model, NUTS(.65), 1000), chainscat, 1:4) # not multithreaded
 # chain = sample(model, NUTS(.65), MCMCThreads(), 100, 4, progress=false) # multithreaded
@@ -211,28 +212,25 @@ show results
 chain0
 ```
 
-```
-Error: UndefVarError: chain0 not defined
-```
-
+<pre class="julia-error">
+ERROR: UndefVarError: chain0 not defined
+</pre>
 
 
 ```julia
 chain1
 ```
 
-```
-Error: UndefVarError: chain1 not defined
-```
-
+<pre class="julia-error">
+ERROR: UndefVarError: chain1 not defined
+</pre>
 
 
 ```julia
 plot(chain0)
 ```
 
-```
-Error: UndefVarError: chain0 not defined
-```
-
+<pre class="julia-error">
+ERROR: UndefVarError: chain0 not defined
+</pre>
 

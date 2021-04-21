@@ -103,8 +103,8 @@ end
 ```
 
 (Note: I originally standardized the three variables as in the commented loss definition above, but 
-this resulted in a worse solution, because R was so close to 0 and has a standard deviation of 10^{-7}. Perhaps a solution is to add a small amount to standard deviations to prevent this distortion. My first 
-attempt, also commented out, did led to instabilities.)
+this resulted in a worse solution, because R was so close to 0 and has a standard deviation of $10^{-7}$. Perhaps a solution is to add a small amount to standard deviations to prevent this distortion. My first 
+attempt, also commented out, led to instabilities.)
 
 The optimizer allows us to provide a callback function to show the loss score, or make a plot, at each iteration.  Here's an example callback function.
 The callback has access to all the return values of the loss function.
@@ -126,8 +126,8 @@ Test the loss function before proceeding.
 loss([1.0; 1.0; 1.0; p])
 ```
 
-We are now ready to use the optimizer. ADAM is the gradient-search method. The optimizer is defined in DiffEqFlux (https://diffeqflux.sciml.ai/v1.34/Scimltrain/) but can use many different backends.
-The optimizer is ADAM: https://arxiv.org/abs/1412.6980
+We are now ready to use the optimizer. ADAM is the gradient-search method. The optimizer is defined in [DiffEqFlux](https://diffeqflux.sciml.ai/v1.34/Scimltrain/) but it can use many different backends.
+The optimizer is [ADAM](https://arxiv.org/abs/1412.6980)
 
 
 ```julia, results = "hidden"
@@ -145,7 +145,8 @@ prob = ODEProblem(droop!, result_ode.u[1:3], tspan, result_ode.u[4:end])
 sol3 = solve(prob, Rosenbrock23())
 ```
 
-We will plot the solution and the discrete samples.
+We will plot the solution and the discrete samples (thin lines for original solution,
+thick lines for solution estimated from data.)
 
 ```julia, echo=false
 Plots.plot(sol1, label = ["Original R" 'Q' 'X'])
@@ -153,7 +154,8 @@ Plots.plot!(sol3, lw = 2, label = ["New R" 'Q' 'X'])
 Plots.scatter!(sol2.t, data1', label = ["Data R" 'Q' 'X'])
 ```
 
-Compare parameters.
+Here we compare parameters; agreement is excellent (a few percent error) except
+for Km.
 
 ```julia, echo=false
 xaxis = ["R0" "Q0" "X0" "Km" "Vmax" "Qmin" "muMax" ]
@@ -167,6 +169,10 @@ plot(p1, p2, layout = (2,1))
 ```
 
 ## Bayesian MCMC parameter estimation
+
+Now we will solve the same problem using a completely different approach. We will get a distribution
+on each parameter and plot many sets of solutions to illustrate the consequences of
+the uncertainty on the trajectories.
 
 Set a random seed to make the result reproducible. Select an option for Turing package.
 
@@ -218,10 +224,11 @@ chain2 = sample(model, NUTS(.65), MCMCThreads(), 2000, 4, progress=false)  # mul
 # chain2 = mapreduce(c -> sample(model, NUTS(.75), 200), chainscat, 1:4) # single thread
 ```
 
-Show the results.
+Show the results in tabular form and as traceplots and distributions.
 
-```julia
+```julia, term=true
 chain2
+plot(chain2)
 ```
 
 Extract data so we can plot trajectories from a selection of parameter values from the posterior distribution. Parameters come out of the chains in alphabetical order, so I resequence them to be in the order: initial conditons, parameter values as used in ODE function.
@@ -229,35 +236,44 @@ Extract data so we can plot trajectories from a selection of parameter values fr
 ```julia, results = "hidden"
 chain_array0 = Array(chain2);
 chain_array = chain_array0[: ,[4, 2, 6, 1, 5, 3, 7] ]  # R Q X Km Vmax Qmin muMax
+p_median = [ median(chain_array, dims=1)  0.0  0.0]
+sol3 = solve(remake(prob, u0 = p_median[1:3], p = p_median[4:end]), Rosenbrock23())
 ```
 
-```julia, echo=false
+Show the original solution (thin, coloured line), estimated solution using median of the posterior distribution
+for each parameter (thick, coloured line), and sample of 300 trajectories from the posterior distribution samples (gray lines).
+
+
+```julia
 N = size(chain_array)[1]
 N2 = Int(N/2)
-pR = Plots.scatter(t, R);
+Plots.scatter(t, R);
 for k in 1:300
     pars = [ chain_array[rand(N2:N), :];  0.0; 0.0 ] # append d, Rin
     resol = solve(remake(prob, u0 = pars[1:3], p = pars[4:end]), Rosenbrock23()) 
-    global pR = plot!(resol, vars=(0,1), alpha=0.3, color = "#BBBBBB", legend = false)
+    plot!(resol, vars=(0,1), alpha=0.3, color = "#BBBBBB", legend = false)
 end
+plot!(sol3, vars=(0,1), alpha=1, color = "#BB0000", legend = false, lw=2)
 pR = plot!(sol1, vars=(0,1), alpha=1, color = "#BB0000", legend = false, ylims=(0, Inf),
         yguide = "R")
 pR = Plots.scatter!(t, R);
-pQ = Plots.scatter(t, Q);
+Plots.scatter(t, Q);
 for k in 1:300
     pars = [ chain_array[rand(N2:N), :];  0.0; 0.0 ] # append d, Rin
     resol = solve(remake(prob, u0 = pars[1:3], p = pars[4:end]), Rosenbrock23()) 
-    global pQ = plot!(resol, vars=(0,2), alpha=0.3, color = "#BBBBBB", legend = false)
+    plot!(resol, vars=(0,2), alpha=0.3, color = "#BBBBBB", legend = false)
 end
+plot!(sol3, vars=(0,2), alpha=1, color = "#BB0000", legend = false, lw=2)
 pQ = plot!(sol1, vars=(0,2), alpha=1, color = "#BB0000", legend = false, ylims=(0, Inf),
         yguide = "Q")
 pQ = Plots.scatter!(t, Q);
-pX = Plots.scatter(t, log.(X));
+Plots.scatter(t, log.(X));
 for k in 1:300
     pars = [ chain_array[rand(N2:N), :];  0.0; 0.0 ] # append d, Rin
     resol = solve(remake(prob, u0 = pars[1:3], p = pars[4:end]), Rosenbrock23()) 
-    global pX = plot!(resol, vars=((t,x) -> (t, log.(x)), 0, 3), alpha=0.3, color = "#BBBBBB", legend = false)
+    plot!(resol, vars=((t,x) -> (t, log.(x)), 0, 3), alpha=0.3, color = "#BBBBBB", legend = false)
 end
+plot!(sol3, vars=((t,x) -> (t, log.(x)), 0,3), alpha=1, color = "#BB0000", legend = false, lw=2)
 pX = plot!(sol1, vars=((t,x) -> (t, log.(x)), 0,3), alpha=1, color = "#BB0000", legend = false,
         yguide = "log X")
 pX = Plots.scatter!(t, log.(X));

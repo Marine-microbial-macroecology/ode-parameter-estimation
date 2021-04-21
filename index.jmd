@@ -10,7 +10,8 @@ Examples are broken into the following sections
 * [Section 2](03-simulations.html): Parameter estimation from simulated data using both "Flux" optimization and "Turing" model with MCMC
 * [Section 3](04-read-data.html): Gather some observational data from four lab cultures undergoing nitrogen starvation
 * [Section 4](05-data-point-estimate.html): SciML optimization to estimate parameters and initial conditions for these data
-* [Section 5](06-posterior-distribution.html): Turing-MCMCChains methods to estimate distributions of parameters and predicted trajectories
+* [Section 5](06-grover-1.html): Turing MCMCChains estimation of posterior distributions for parameters (early version)
+* [Section 5](06-posterior-distribution.html): (not working yet) Turing-MCMCChains methods to estimate distributions of parameters and predicted trajectories
 
 A related effort is to discover the differential equations that drive a system by sparse regression. That is, provide many possible terms for the right hand side of $x' = f(t,x)$ and 
 use LASSO-type shrinkage to eliminate most of the terms.
