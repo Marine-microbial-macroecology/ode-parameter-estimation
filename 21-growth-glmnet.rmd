@@ -35,7 +35,7 @@ Plot, with a focus on growth rate and quota, macromolecules.
 
 The traditional model for growth rate, at least at equilibrium, is
 
-$$\mu - \mu_{max}\left(1 - \frac{Q_{min}}{Q}\right)$$
+$$\mu = \mu_{max}\left(1 - \frac{Q_{min}}{Q}\right)$$
 where Q is the cell content (quota) of a limiting resource. In these experiments that is nitrogen.
 
 So the first plot shows growth rate as a function of 1/N (nitrogen per cell). The RNA/protein ratio is thought to be important too, so I'm showing that as well.

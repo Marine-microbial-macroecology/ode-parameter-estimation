@@ -1,0 +1,7 @@
+.html
+documents/*
+.ipynb_checkpoints/*
+build/*
+OldFiles/*
+*.cache
+*.html

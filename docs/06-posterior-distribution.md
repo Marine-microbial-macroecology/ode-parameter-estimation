@@ -4,7 +4,7 @@ Of parameters an initial conditions for the Droop-Grover system using data from 
 
 Start by preparing the data the same way we did for the point-estimate example
 
-```julia, results = "hidden"
+```julia
 # packages
 using DataFrames, CSV, StatsPlots, Query
 using DifferentialEquations, Plots
@@ -56,11 +56,14 @@ function droop!(du, u, p, t)
 end
 ```
 
+
+
+
 Create model to fit to data.
 
 First simplified using one replicate.
 
-```julia, results = "hidden"
+```julia
 @model function fitDroop0(DF)
     data0a = identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])') 
     t_a = data0a[1,:]
@@ -97,9 +100,12 @@ First simplified using one replicate.
 end
 ```
 
+
+
+
 Now using all three replicates.
 
-```julia, results = "hidden"
+```julia
 @model function fitDroop1(DF)
     data0a = identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])') 
     data0b = identity.(Array(filter(:Replicate => x -> x == "B", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
@@ -169,23 +175,30 @@ Now using all three replicates.
 end
 ```
 
+
+
+
 ## Thalasiosira weisflogii
 
-```julia, results = "hidden"
+```julia
 model0 = fitDroop0(Tw)
 model1 = fitDroop1(Tw)
-
 ```
+
+
+
 
 Fit model
 
-```julia, results = "hidden"
+```julia
 chain0 = sample(model0, NUTS(0.65), 100)  
 chain1 = sample(model1, NUTS(0.65), 100)  
 # chain = mapreduce(c -> sample(model, NUTS(.65), 1000), chainscat, 1:4) # not multithreaded
 # chain = sample(model, NUTS(.65), MCMCThreads(), 100, 4, progress=false) # multithreaded
-
 ```
+
+
+
 
 Fitting the chains gives an error: ERROR: TypeError: in typeassert, expected Float64, got a value of type ForwardDiff.Dual{Nothing, Float64, 9}
 
@@ -198,11 +211,28 @@ show results
 chain0
 ```
 
+```
+Error: UndefVarError: chain0 not defined
+```
+
+
+
 ```julia
 chain1
 ```
 
+```
+Error: UndefVarError: chain1 not defined
+```
+
+
+
 ```julia
 plot(chain0)
 ```
+
+```
+Error: UndefVarError: chain0 not defined
+```
+
 

@@ -16,6 +16,7 @@ Here I will show culture data for N-starved cultures of phytoplankton, tracked o
 ```julia
 using DataFrames, CSV, StatsPlots, Query
 import Gadfly
+using Compose, Cairo, Fontconfig
 ```
 
 Read the data from a file. Simplify some of the names. Change missing dilution factors to 1, and compute cumulative dilution factor by multiplication.
@@ -77,35 +78,50 @@ We will use the following columns
 
 Make some plots to show the data.
 
-```julia
+```julia term=true
 @df liefer scatter(:days, :N, group = :Species)
+@df liefer scatter(:days, log.(:cells), group = :Species)
 liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :N, group = :Replicate)
 liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :DIN_pgml_corr, group = :Replicate)
 liefer |> @filter(_.Species == "Micromonas sp.")  |> @df scatter(:days, :mass, group = :Replicate)
-@df liefer scatter(:days, log.(:cells), group = :Species)
 ```
 
-Using Gadfly to make facetted plots.
+Experiment with using Gadfly to make facetted plots.
 
-```julia
-Gadfly.plot(liefer, 
+Gadfly output doesn't work with Weave.jl. Work around of writing graphic to file and displaying it also fails.
+
+```julia term=true
+p1 = Gadfly.plot(liefer, 
     ygroup = "Species", x = "days", y = "N", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis = true))
-Gadfly.plot(liefer, 
+# draw(SVG("04-gadfly-01.svg", 6inch, 4inch), p1)
+# draw(PNG("04-gadfly-01.png", 6inch, 4inch), p1)
+# p1 = load("04-gadfly-01.png")
+# display(p1)
+p2 = Gadfly.plot(liefer, 
     ygroup = "Species", x = "days", y = "DIN_pgml_corr", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis = true))
-Gadfly.plot(liefer, 
+# draw(PNG("04-gadfly-02.png", 6inch, 4inch), p1)
+# p2 = load("04-gadfly-02.png")
+# display(p2)
+p3 = Gadfly.plot(liefer, 
     ygroup = "Species", x = "days", y = "cells", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis=true), 
     Gadfly.Scale.y_log10)
-Gadfly.plot(liefer, 
+# draw(PNG("04-gadfly-03.png", 6inch, 4inch), p1)
+# p3 = load("04-gadfly-03.png")
+# display(p3)
+p4 = Gadfly.plot(liefer, 
     ygroup = "Species", x = "days", y = "mass", Gadfly.Geom.subplot_grid(Gadfly.Geom.point,
     free_y_axis = true))
+# draw(PNG("04-gadfly-04.png", 6inch, 4inch), p1)
+# p4 = load("04-gadfly-04.png")
+# display(p4)
 ```
 
 Create subsets of the data, one for each species, and just the variables t, R, Q, X to be used in the 
-model in the next section. Drop missing data.
-
+model in the next section. Drop missing data. (This is a demonstration only; see later files for 
+examples with this data.
 
 ```julia, results="hidden"
 Tp = filter([:Species, :cell_density ] => (x,y) -> x == "Thalassiosira pseudonana" && !ismissing(y), liefer)[:, [:days, :Replicate, :DIN_pgml, :N, :cell_density, :mass]]

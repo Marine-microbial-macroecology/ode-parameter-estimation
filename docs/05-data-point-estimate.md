@@ -2,7 +2,7 @@
 
 Of parameters an initial conditions for the Droop-Grover system using data from Liefer et al (2019).
 
-```julia, results = "hidden"
+```julia
 using DataFrames, CSV, StatsPlots, Query
 using DifferentialEquations, Plots
 using Flux, DiffEqFlux, Optim, DiffEqSensitivity
@@ -41,9 +41,12 @@ function droop!(du, u, p, t)
 end
 ```
 
+
+
+
 Define a loss function that uses all three replicates from a single species, allows for distinct initial conditions for each replicate, but estimates a common parameter set for all three.
 
-```julia, results = "hidden"
+```julia
 # DF = Ms # data for this calculation
 # my_error(dataM, solutionM) -> sum((dataM .- solutionM) .^ 2) # simple version; does not work well.
 function my_error(dataM, solutionM)
@@ -104,9 +107,12 @@ function loss(p)
 end
 ```
 
+
+
+
 Test the loss function.
 
-```julia, results = "hidden"
+```julia
 DF = Ms
 my_scale = Diagonal([1.0, 1/100000.0,  100.0,  1/1000000.0])
 # the following can't be defined in loss() or causes error in sciml_train function call
@@ -121,9 +127,12 @@ p = identity.(p) # get rid of missing value types; causes problems with ODE solv
 loss(p)
 ```
 
+
+
+
 Perform the optimization.  Convergence is very slow, as you might expect, with the full set of 3 x 3 initial conditions and 4 parameters. Search for parameters first using only one initial condition, then include the others.
 
-```julia, results = "hidden"
+```julia
 # p1 = identity.([ vec(Array(DF[1, 3:5])') ; 100000.0 ; 0.1; 0.5; 1.0] )
 p1 = identity.([ data0a[2:end, 1]; 10.0 ; 0.1; 0.5; 1.0] )
 result_Ms = DiffEqFlux.sciml_train(loss, p1,
@@ -140,19 +149,25 @@ result_Ms2 = DiffEqFlux.sciml_train(loss, p3,
                                     maxiters = 200)
 ```
 
+
+
+
 ## Results for Micromonas sp.
 
 Show parameters.
 
-```julia, results = "hidden"
+```julia
 dt = result_Ms2.u[10:13]
 pretty_table(dt', ["Km", "Vmax", "Qmin", "µmax"])
 ```
 
 
+
+
+
 Show initial conditions and estimated initial conditions (scaled).
 
-```julia, results = "hidden"
+```julia
 dt = [data0a[2:end,1] result_Ms2.u[1:3] data0b[2:end,1] result_Ms2.u[(1:3) .+ 3] data0c[2:end,1] result_Ms2.u[(1:3) .+ 6]]
 # header = (["R", "", "Q", "", "X", ""], ["Data", "Model", "Data", "Model", "Data", "Model"])
 # pretty_table(dt, row_names = ["Rep 1", "Rep 2" ,"Rep 3"]; header = header)
@@ -161,9 +176,12 @@ pretty_table(dt, header, row_names = ["R", "Q" ,"ln X"])
 ```
 
 
+
+
+
 Show solution and data (scaled).
 
-```julia, results = "hidden"
+```julia
 soln = solve(ODEProblem(droop!, result_Ms2.u[1:3], (0.0, 20.0), [result_Ms2.u[10:13]; 0.0; 0.0]), Rosenbrock23())
 Plots.scatter(data0a[1,:], data0a[2:end,:]', layout = (3,1), ylabel = ["R" "Q" "log X"])
 Plots.scatter!(data0b[1,:], data0b[2:end,:]')
@@ -171,10 +189,14 @@ Plots.scatter!(data0c[1,:], data0c[2:end,:]')
 Plots.plot!(soln, legend=false)
 ```
 
+![](figures/05-data-point-estimate_7_1.png)
+
+
+
 ## T weisflogii
 
 
-```julia, results = "hidden"
+```julia
 DF = Tw
 my_scale = Diagonal([1.0, 1/100000.0,  0.1,  1/10000.0])
 data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
@@ -209,11 +231,15 @@ Plots.scatter!(data0c[1,:], data0c[2:end,:]')
 Plots.plot!(soln, legend=false)
 ```
 
+![](figures/05-data-point-estimate_8_1.png)
+
+
+
 
 ## T pseudonana
 
 
-```julia, results = "hidden"
+```julia
 DF = Tp
 my_scale = Diagonal([1.0, 1/100000.0,  1.0,  1/100000.0])
 data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
@@ -248,12 +274,16 @@ Plots.scatter!(data0c[1,:], data0c[2:end,:]')
 Plots.plot!(soln, legend=false)
 ```
 
+![](figures/05-data-point-estimate_9_1.png)
+
+
+
 
 
 ## O tauri
 
 
-```julia, results = "hidden"
+```julia
 DF = Ot
 my_scale = Diagonal([1.0, 1/1000000.0,  100.0,  1/1000000.0])
 data0a = my_scale * identity.(Array(filter(:Replicate => x -> x == "A", DF)[:, [:days, :DIN_pgml, :N, :cells]])')
@@ -287,5 +317,9 @@ Plots.scatter!(data0b[1,:], data0b[2:end,:]')
 Plots.scatter!(data0c[1,:], data0c[2:end,:]')
 Plots.plot!(soln, legend=false)
 ```
+
+![](figures/05-data-point-estimate_10_1.png)
+
+
 
 Are the bad fits because of poor convergence, inappropriate scaling, or some other factor?

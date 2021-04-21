@@ -1,0 +1,82 @@
+# Multithreads demonstration
+
+From YouTube lecture by Alan Edelman as part of MIT 18.S191 "Computational Thinking" Week 8 on Julia youtube channel.
+
+https://www.youtube.com/watch?v=dczkYlOM2sg
+
+Start by creating multithread kernel option for jupyter lab, or start with julia --numthreads 10
+
+e.g. installkernel("Julia (4 threads)", env=Dict("JULIA_NUM_THREADS" => "4")
+
+```julia, term=true
+Threads.nthreads()
+
+using StaticArrays, Plots, StatsBase, FLoops
+
+function birthday(n)
+    success = 0
+    for t = 1:n
+        months = rand(1:12, 20)
+        counts = [sum(months .== i) for i=1:12]
+        success += sum(counts .== 2) == 4 && sum(counts .== 3) ==4
+    end
+    success/n
+end
+
+@time birthday(100_000)
+
+function birthday(n)
+    success = 0
+    for t = 1:n
+        months = @SVector [rand(1:12) for i = 1:20]
+        counts = @SVector [sum(months .== i) for i=1:12]
+        success += sum(counts .== 2) == 4 && sum(counts .== 3) ==4
+    end
+    success/n
+end
+
+@time birthday(100_000)
+
+function birthday_distribution(t)
+    v = zeros(t)
+    for i = 1:t
+        v[i] = birthday(50_000)
+    end
+    h = fit(Histogram, v, 0.0005:0.00001:0.0015)
+end
+
+@time h  = birthday_distribution(1_000)
+
+sum(h.weights)
+
+plot(h, legend=false)
+
+function birthday_floop(t, ncores)
+    v = 0
+    @floop ThreadedEx(basesize = t ÷ ncores) for _ in 1:t
+        months = @SVector [rand(1:12) for i = 1:20]
+        counts = @SVector [sum(months .== i) for i=1:12]
+        success = sum(counts .== 2) == 4 && sum(counts .== 3) ==4
+        @reduce(v += success)
+    end
+    return v/t
+end
+
+@time birthday_floop(1_000_000, 1)
+
+@time birthday_floop(1_000_000, 4)
+
+function birthday_dist_floop(t, ncores)
+    bins = 0.000005:0.0001:0.002
+    empty_hist = birthday_distribution(0)
+    @floop ThreadedEx(basesize= 1) for _ in 1:ncores
+        @reduce(h =merge(empty_hist, birthday_distribution(t÷ncores)))
+    end
+    return(h)
+end
+
+@time h = birthday_dist_floop(1_000, 4)
+
+plot(h, legend=false)
+
+```
